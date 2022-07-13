@@ -14,9 +14,11 @@ In two next minor releases, there will be some additions include:
 
 # Wait, 3.0? Where are the older ones?
 
-Sadly, it got busted by accident. However, there's another major motivation: It was too slow. (Benchmarks coming soon.)
+Sadly, it got busted by accident. However, there's another major motivation to make this script from scratch: It was too slow. (Benchmarks coming soon.)
 
 # How to use the log reader
+
+First, get the script, either by cloning the repository or download the script directly from this website.
 
 Usage:
 ```
