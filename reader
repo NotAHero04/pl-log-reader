@@ -5,9 +5,6 @@
 # A full reimplementation of the log reader (the old 2.1.1 was gone because my phone go brrr)
 # Incredibly fast (around 60% faster)
 
-# Temporary files destination
-
-
 main() {
 	case $1 in
 		-h | --help)
@@ -27,6 +24,8 @@ main() {
 }
 
 preinit() {
+	# Temporary files destination
+
 	reader_dir="$HOME/.reader"
 	preprocess_dir="$HOME/.reader/preprocess/preprocess"
 	basicchecks_dir="$HOME/.reader/preprocess/basicchecks"
@@ -51,7 +50,7 @@ welcome() {
 
 version() {
 	echo "Version: 3.1.0-dev.1"
-	echo "Timestamp: 2022-07-13 6:11 PM UTC+7"
+	echo "Timestamp: 2022-07-13 8:35 PM UTC+7"
 }
 
 reader() {
