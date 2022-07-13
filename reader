@@ -20,7 +20,7 @@ preinit() {
 	reader_dir="$HOME/.reader"
 	preprocess_dir="$HOME/.reader/preprocess/preprocess"
 	basicchecks_dir="$HOME/.reader/preprocess/basicchecks"
-	platformcheck_dir="$HOME/.reader/platform"
+	instancecheck_dir="$HOME/.reader/platform"
 	minecraft_dir="$HOME/.reader/minecraft"
 	ml_dir="$HOME/.reader/ml/mod"
 }
@@ -32,14 +32,15 @@ init() {
 	fi
 	mkdir -p $preprocess_dir &
 	mkdir -p $basicchecks_dir &
-	mkdir -p $platformcheck_dir/{android,ios} &
+	mkdir -p $instancecheck_dir/{android,ios} &
 	mkdir -p $minecraft_dir &
 	mkdir -p $ml_dir &
 	wait
 	touch $preprocess_dir/{renderer,arch,fabric,fml,modlauncher,optifine} &
 	touch $basicchecks_dir/{result,corruptgame,oom} &
-	touch $platformcheck_dir/android/launcherversion &
-	touch $platformcheck_dir/ios/{deviceinfo,device,platform,version} &
+	touch $instancecheck_dir/platform
+	touch $instancecheck_dir/android/launcherversion &
+	touch $instancecheck_dir/ios/{deviceinfo,device,platform,version} &
 	touch $minecraft_dir/version &
 	touch $ml_dir/{ml,mlversion,mcversion} &
 	wait
@@ -54,18 +55,30 @@ welcome() {
 }
 
 version() {
-	echo "Version: 3.1.0-dev.1"
-	echo "Timestamp: 2022-07-13 8:35 PM UTC+7"
+	echo "Version: 3.1.0-dev.2"
+	echo "Timestamp: 2022-07-13 11:14 PM UTC+7"
 }
 
 reader() {
-	if [[ ! -d $HOME/.reader ]]; then
-		init; preprocess $1
-	elif [[ ! -r $1 ]]; then
+	if [[ ! -r $1 ]]; then
 		echo "ERROR: The log file does not exist or is unreadable."
+	elif [[ ! -d $HOME/.reader ]]; then
+		init; sequence $1
 	else
-		preprocess $1
+		sequence $1
 	fi
+}
+
+sequence() {
+	preprocess $1 &
+	preprocess_basic_checks $1 &
+	wait
+	instance_check $1 &
+	optifine $1 &
+	modloader $1 &
+	basic_checks $1 > $basicchecks_dir/result &
+	wait
+	cat $basicchecks_dir/result
 }
 
 preprocess() {
@@ -79,7 +92,6 @@ preprocess() {
 	egrep -m 1 -o "Forge mod loading, version .*, for MC .* with MCP .*" $1 > $preprocess_dir/modlauncher &
 	egrep -m 1 -o "OptiFine_.*_HD_U_.*" $1 > $preprocess_dir/optifine &
 	wait
-	platform_check $1
 }
 
 preprocess_basic_checks() {
@@ -95,47 +107,38 @@ renderer() {
 	esac
 }
 
-platform_check() {
-	preprocess_basic_checks $1 &
+instance_check() {
 	if [ ! -z "$(< $preprocess_dir/arch)" ]; then
-		platform=Android
+		echo "Android" > $instancecheck_dir/platform
 		echo "Platform: Android, $(< $preprocess_dir/arch)"
-		sed -n 2p $1 | cut -d ' ' -f4 > $platformcheck_dir/android/launcherversion
-		echo "Launcher version: $(< $platformcheck_dir/android/launcherversion)"
+		sed -n 2p $1 | cut -d ' ' -f4 > $instancecheck_dir/android/launcherversion
+		sed -n "6p" $1 | cut -d ' ' -f 5- > $minecraft_dir/version &
+		wait
+		echo "Launcher version: $(< $instancecheck_dir/android/launcherversion)"
 		echo "Renderer: $(< $preprocess_dir/renderer)"
+		echo "Minecraft version: $(< $minecraft_dir/version)"
 	else
-		sed -n 1p $1 > $platformcheck_dir/ios/deviceinfo
-		cut -d ' ' -f5 ./.temp14 > $platformcheck_dir/ios/device
-		cut -d ' ' -f7 ./.temp14 > $platformcheck_dir/ios/platform &
-		cut -d ' ' -f8 ./.temp14 > $platformcheck_dir/ios/version &
+		sed -n 1p $1 > $instancecheck_dir/ios/deviceinfo
+		cut -d ' ' -f5 ./.temp14 > $instancecheck_dir/ios/device
+		cut -d ' ' -f7 ./.temp14 > $instancecheck_dir/ios/platform &
+		cut -d ' ' -f8 ./.temp14 > $instancecheck_dir/ios/version &
+		egrep -m 1 -o "Launching Minecraft .*" $1 | cut -d ' ' -f3 > $minecraft_dir/version &
 		if [ -r ./ios_devices.txt ]; then
-			device=$(grep -m 1 $(< $platformcheck_dir/ios/deviceinfo) ./ios_devices.txt | cut -d ':' -f2)
+			device=$(grep -m 1 $(< $instancecheck_dir/ios/deviceinfo) ./ios_devices.txt | cut -d ':' -f2)
 			echo "Device:$device"
 		else
-			echo "Device: $(< $platformcheck_dir/ios/device)"
+			echo "Device: $(< $instancecheck_dir/ios/device)"
 		fi &
 		wait
-		echo "Platform: $(< $platformcheck_dir/ios/platform), version $(< $platformcheck_dir/ios/version), arm64"
+		echo "Platform: $(< $instancecheck_dir/ios/platform), version $(< $instancecheck_dir/ios/version), arm64"
+		echo "Minecraft version: $(< $minecraft_dir/version)"
 	fi
-	mc_version $1 $platform &
-	wait
-}
-
-mc_version() {
-	if [ "$2" == "Android" ]; then
-		sed -n "6p" $1 | cut -d ' ' -f 5- > $minecraft_dir/version
-	else
-		egrep -m 1 -o "Launching Minecraft .*" $1 | cut -d ' ' -f3 > $minecraft_dir/version
-	fi
-	echo "Minecraft version: $(< $minecraft_dir/version)"
-	optifine $1
 }
 
 optifine() {
 	if [ ! -z "$(< $preprocess_dir/optifine)" ]; then
 		echo "OptiFine version $(< $preprocess_dir/optifine)"
 	fi
-	modloader $1
 }
 
 modloader() {
@@ -171,9 +174,6 @@ modloader() {
 		echo "Mod Loader: Forge, version $(< $ml_dir/mlversion) for Minecraft $(< $ml_dir/mcversion)"
 	fi &
 #	TODO: Add more mod loaders
-	basic_checks $1 > $basicchecks_dir/result &
-	wait
-	cat $basicchecks_dir/result
 }
 
 basic_checks() {
