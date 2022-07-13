@@ -2,7 +2,7 @@
 This is the home for PojavLauncher Log Reader, a fast log analyzer for PojavLauncher.
 
 # What can it do?
-As of version 3.0.0, this program can analyze tge log and spit out some information about the launcher instance.
+As of version 3.0.0, this program can analyze the log and spit out some information about the launcher instance.
 
 # What's the plan for this project?
 
