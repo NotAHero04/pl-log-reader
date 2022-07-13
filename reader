@@ -5,6 +5,9 @@
 # A full reimplementation of the log reader (the old 2.1.1 was gone because my phone go brrr)
 # Incredibly fast (around 60% faster)
 
+# Temporary files destination
+
+
 main() {
 	case $1 in
 		-h | --help)
@@ -13,10 +16,29 @@ main() {
 		-v | --version)
 		version
 		;;
+		-i | --init)
+		init
+		;;
 		*)
+		preinit
 		reader $1
 		;;
 	esac
+}
+
+preinit() {
+	reader_dir="$HOME/.reader"
+	preprocess_dir="$HOME/.reader/preprocess/preprocess"
+	basicchecks_dir="$HOME/.reader/preprocess/basicchecks"
+	platformcheck_dir="$HOME/.reader/platform"
+	ml_dir="$HOME/.reader/ml/mod"
+}
+
+init() {
+	preinit
+	rm -r $reader_dir
+	mkdir -p $preprocess_dir $basicchecks_dir $platformcheck_dir/{android,ios} $ml_dir
+	touch $preprocess_dir/{renderer,arch,fabric,fml,modlauncher,optifine} $basicchecks_dir/corruptgame $platformcheck_dir/android/launcherversion $platformcheck_dir/ios/{deviceinfo,device,platform,version} $ml_dir/{ml,mlversion,mcversion}
 }
 
 welcome() {
@@ -28,12 +50,14 @@ welcome() {
 }
 
 version() {
-	echo "Version: 3.0.0"
+	echo "Version: 3.1.0-dev.1"
 	echo "Timestamp: 2022-07-13 6:11 PM UTC+7"
 }
 
 reader() {
-	if [[ !(-r $1) ]]; then
+	if [[ ! -d $HOME/.reader ]]; then
+		echo "ERROR: Please execute \"$0 -i\" to initialize the resource needed for running the script."
+	elif [[ ! -r $1 ]]; then
 		echo "ERROR: The log file does not exist or is unreadable."
 	else
 		preprocess $1
@@ -43,15 +67,19 @@ reader() {
 preprocess() {
 	# Should we preprocess without context?
 	# It might introduce some unwanted overhead.
-	renderer $(egrep -m 1 -o "POJAV_RENDERER=.*" $1 | cut -d '=' -f2) > ./.temp13 &
+	renderer $(egrep -m 1 -o "POJAV_RENDERER=.*" $1 | cut -d '=' -f2) > $preprocess_dir/renderer &
+	sed -n 4p $1 | cut -d ' ' -f2 | egrep 'arm64|x86_64|arm|x86' > $preprocess_dir/arch &
 	# Prepare for everything
-	egrep -m 1 -n -o "Loading Minecraft .* with .* Loader .*" $1 > ./.temp4 &
-	egrep -m 1 -o "Forge Mod Loader version .* for Minecraft .* loading" $1 > ./.temp5 &
-	egrep -m 1 -o "Forge mod loading, version .*, for MC .* with MCP .*" $1 > ./.temp6 &
-	egrep -m 1 -o "OptiFine_.*_HD_U_.*" $1 > ./.temp10 &
-	sed -n 4p $1 | cut -d ' ' -f2 | egrep 'arm64|x86_64|arm|x86' > ./.temp11 &
+	egrep -m 1 -n -o "Loading Minecraft .* with .* Loader .*" $1 > $preprocess_dir/fabric &
+	egrep -m 1 -o "Forge Mod Loader version .* for Minecraft .* loading" $1 > $preprocess_dir/fml &
+	egrep -m 1 -o "Forge mod loading, version .*, for MC .* with MCP .*" $1 > $preprocess_dir/modlauncher &
+	egrep -m 1 -o "OptiFine_.*_HD_U_.*" $1 > $preprocess_dir/optifine &
 	wait
 	platform_check $1
+}
+
+preprocess_basic_checks() {
+	grep -m 1 "Could not find or load main class net.minecraft.client.main.Main" > $basicchecks_dir/corruptgame &
 }
 
 renderer() {
@@ -66,25 +94,25 @@ renderer() {
 }
 
 platform_check() {
-	if [ ! -z "$(< ./.temp11)" ]; then
+	if [ ! -z "$(< $preprocess_dir/arch)" ]; then
 		platform=Android
-		echo "Platform: Android, $(< ./.temp11)"
-		sed -n 2p $1 | cut -d ' ' -f4 > ./.temp12
-		echo "Launcher version: $(< ./.temp12)"
-		echo "Renderer: $(< ./.temp13)"
+		echo "Platform: Android, $(< $preprocess_dir/arch)"
+		sed -n 2p $1 | cut -d ' ' -f4 > $platformcheck_dir/android/launcherversion
+		echo "Launcher version: $(< $platformcheck_dir/android/launcherversion)"
+		echo "Renderer: $(< $preprocess_dir/renderer)"
 	else
-		sed -n 1p $1 > ./.temp14
-		cut -d ' ' -f5 ./.temp14 > ./.temp1
-		cut -d ' ' -f7 ./.temp14 > ./.temp2 &
-		cut -d ' ' -f8 ./.temp14 > ./.temp3 &
+		sed -n 1p $1 > $platformcheck_dir/ios/deviceinfo
+		cut -d ' ' -f5 ./.temp14 > $platformcheck_dir/ios/device
+		cut -d ' ' -f7 ./.temp14 > $platformcheck_dir/ios/platform &
+		cut -d ' ' -f8 ./.temp14 > $platformcheck_dir/ios/version &
 		if [ -r ./ios_devices.txt ]; then
-			device=$(grep -m 1 $(< ./.temp1) ./ios_devices.txt | cut -d ':' -f2)
+			device=$(grep -m 1 $(< $platformcheck_dir/ios/deviceinfo) ./ios_devices.txt | cut -d ':' -f2)
 			echo "Device:$device"
 		else
-			echo "Device: $(< ./.temp1)"
+			echo "Device: $(< $platformcheck_dir/ios/device)"
 		fi &
 		wait
-		echo "Platform: $(< ./.temp2), version $(< ./.temp3), arm64"
+		echo "Platform: $(< $platformcheck_dir/ios/platform), version $(< $platformcheck_dir/ios/version), arm64"
 	fi
 	mc_version $1 $platform
 }
@@ -100,43 +128,43 @@ mc_version() {
 }
 
 optifine() {
-	if [ ! -z "$(< ./.temp10)" ]; then
-		echo "OptiFine version $(< ./.temp10)"
+	if [ ! -z "$(< $preprocess_dir/optifine)" ]; then
+		echo "OptiFine version $(< $preprocess_dir/optifine)"
 	fi
 	modloader $1
 }
 
 modloader() {
-	if [ ! -z "$(< ./.temp4)" ]; then
-		cut -d ' ' -f3 ./.temp4 > ./.temp7 &
-		cut -d ' ' -f5 ./.temp4 > ./.temp8 &
-		cut -d ' ' -f7 ./.temp4 > ./.temp9 &
-		line=$(cut -d ':' -f1 ./.temp4)
+	if [ ! -z "$(< $preprocess_dir/fabric)" ]; then
+		cut -d ' ' -f3 $preprocess_dir/fabric > $ml_dir/ml &
+		cut -d ' ' -f5 $preprocess_dir/fabric > $ml_dir/mlversion &
+		cut -d ' ' -f7 $preprocess_dir/fabric > $ml_dir/mcversion &
+		line=$(cut -d ':' -f1 $preprocess_dir/fabric)
 		mod=$(sed -n "$((line+1))p" $1 | egrep -o "Loading .* mods" | cut -d ' ' -f2)
 		wait
-		echo "Mod Loader: $(< ./.temp7), version $(< ./.temp8) for Minecraft $(< ./.temp9)"
+		echo "Mod Loader: $(< $ml_dir/ml), version $(< $ml_dir/mlversion) for Minecraft $(< $ml_dir/mcversion)"
 		if [ -z $mod ]; then
 			echo "Mod count: $mod"
 		fi
 	fi &
 #	TODO: Adapt this to older versions (... Minecraft client: 1.3.2, server: 1.3.2 loading)
-	if [ ! -z "$(< ./.temp5)" ]; then
-		cut -d ' ' -f5 ./.temp5 > ./.temp7 &
-		cut -d ' ' -f8 ./.temp5 > ./.temp8 &
+	if [ ! -z "$(< $preprocess_dir/fml)" ]; then
+		cut -d ' ' -f5 $preprocess_dir/fml > $ml_dir/mlversion &
+		cut -d ' ' -f8 $preprocess_dir/fml > $ml_dir/mcversion &
 		egrep -m 1 -o "Forge Mod Loader has successfully loaded .* mods" $1 | cut -d ' ' -f7 > ./.temp9 &
 		wait
-		echo "Mod Loader: Forge, version $(< ./.temp7) for Minecraft $(< ./.temp8)"
+		echo "Mod Loader: Forge, version $(< $ml_dir/mlversion) for Minecraft $(< $ml_dir/mcversion)"
 		if [ $(< ./.temp9) -gt 0 ]; then
 			echo "Mod count: $(< ./.temp9)"
 		fi
 	fi &
 #	Forge, but for 1.13+
 #	The Mod Launcher don't give us the mod count. Attempting to do it is a waste of time.
-	if [ ! -z "$(< ./.temp6)" ]; then
-		cut -d ' ' -f5 ./.temp6 | cut -d ',' -f1 > ./.temp7 &
-		cut -d ' ' -f8 ./.temp6 > ./.temp8 &
+	if [ ! -z "$(< $preprocess_dir/modlauncher)" ]; then
+		cut -d ' ' -f5 $preprocess_dir/modlauncher | cut -d ',' -f1 > $ml_dir/mlversion &
+		cut -d ' ' -f8 $preprocess_dir/modlauncher > $ml_dir/mcversion &
 		wait
-		echo "Mod Loader: Forge, version $(< ./.temp7) for Minecraft $(< ./.temp8)"
+		echo "Mod Loader: Forge, version $(< $ml_dir/mlversion) for Minecraft $(< $ml_dir/mcversion)"
 	fi &
 	wait
 #	TODO: Add more mod loaders
