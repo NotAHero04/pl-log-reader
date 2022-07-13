@@ -7,19 +7,10 @@
 
 main() {
 	case $1 in
-		-h | --help)
-		welcome
-		;;
-		-v | --version)
-		version
-		;;
-		-i | --init)
-		init
-		;;
-		*)
-		preinit
-		reader $1
-		;;
+		-h | --help) welcome ;;
+		-v | --version) version ;;
+		-r | --reset) init ;;
+		*) preinit; reader $1 ;;
 	esac
 }
 
@@ -30,14 +21,28 @@ preinit() {
 	preprocess_dir="$HOME/.reader/preprocess/preprocess"
 	basicchecks_dir="$HOME/.reader/preprocess/basicchecks"
 	platformcheck_dir="$HOME/.reader/platform"
+	minecraft_dir="$HOME/.reader/minecraft"
 	ml_dir="$HOME/.reader/ml/mod"
 }
 
 init() {
 	preinit
-	rm -r $reader_dir
-	mkdir -p $preprocess_dir $basicchecks_dir $platformcheck_dir/{android,ios} $ml_dir
-	touch $preprocess_dir/{renderer,arch,fabric,fml,modlauncher,optifine} $basicchecks_dir/corruptgame $platformcheck_dir/android/launcherversion $platformcheck_dir/ios/{deviceinfo,device,platform,version} $ml_dir/{ml,mlversion,mcversion}
+	if [ -d $reader_dir ]; then
+		rm -r $reader_dir
+	fi
+	mkdir -p $preprocess_dir &
+	mkdir -p $basicchecks_dir &
+	mkdir -p $platformcheck_dir/{android,ios} &
+	mkdir -p $minecraft_dir &
+	mkdir -p $ml_dir &
+	wait
+	touch $preprocess_dir/{renderer,arch,fabric,fml,modlauncher,optifine} &
+	touch $basicchecks_dir/{result,corruptgame,oom} &
+	touch $platformcheck_dir/android/launcherversion &
+	touch $platformcheck_dir/ios/{deviceinfo,device,platform,version} &
+	touch $minecraft_dir/version &
+	touch $ml_dir/{ml,mlversion,mcversion} &
+	wait
 }
 
 welcome() {
@@ -55,7 +60,7 @@ version() {
 
 reader() {
 	if [[ ! -d $HOME/.reader ]]; then
-		echo "ERROR: Please execute \"$0 -i\" to initialize the resource needed for running the script."
+		init; preprocess $1
 	elif [[ ! -r $1 ]]; then
 		echo "ERROR: The log file does not exist or is unreadable."
 	else
@@ -78,21 +83,20 @@ preprocess() {
 }
 
 preprocess_basic_checks() {
-	grep -m 1 "Could not find or load main class net.minecraft.client.main.Main" > $basicchecks_dir/corruptgame &
+	grep -m 1 "Could not find or load main class net.minecraft.client.main.Main" $1 > $basicchecks_dir/corruptgame &
+	grep -m 1 "java.lang.OutOfMemoryError" $1 > $basicchecks_dir/oom &
+	wait
 }
 
 renderer() {
 	case $1 in
-		opengles2)
-		echo "gl4es"
-		;;
-		opengles3_virgl)
-		echo "virgl"
-		;;
+		opengles2) echo "gl4es" ;;
+		opengles3_virgl) echo "virgl" ;;
 	esac
 }
 
 platform_check() {
+	preprocess_basic_checks $1 &
 	if [ ! -z "$(< $preprocess_dir/arch)" ]; then
 		platform=Android
 		echo "Platform: Android, $(< $preprocess_dir/arch)"
@@ -113,16 +117,17 @@ platform_check() {
 		wait
 		echo "Platform: $(< $platformcheck_dir/ios/platform), version $(< $platformcheck_dir/ios/version), arm64"
 	fi
-	mc_version $1 $platform
+	mc_version $1 $platform &
+	wait
 }
 
 mc_version() {
 	if [ "$2" == "Android" ]; then
-		mcv=$(sed -n "6p" $1 | cut -d ' ' -f 5-)
+		sed -n "6p" $1 | cut -d ' ' -f 5- > $minecraft_dir/version
 	else
-		mcv=$(egrep -m 1 -o "Launching Minecraft .*" $1 | cut -d ' ' -f3)
+		egrep -m 1 -o "Launching Minecraft .*" $1 | cut -d ' ' -f3 > $minecraft_dir/version
 	fi
-	echo "Minecraft version: $mcv"
+	echo "Minecraft version: $(< $minecraft_dir/version)"
 	optifine $1
 }
 
@@ -165,8 +170,22 @@ modloader() {
 		wait
 		echo "Mod Loader: Forge, version $(< $ml_dir/mlversion) for Minecraft $(< $ml_dir/mcversion)"
 	fi &
-	wait
 #	TODO: Add more mod loaders
+	basic_checks $1 > $basicchecks_dir/result &
+	wait
+	cat $basicchecks_dir/result
+}
+
+basic_checks() {
+	if [ ! -z "$(< $basicchecks_dir/corruptgame)" ]; then
+		echo "Error description: Game files are corrupt."
+		echo "Solution: Delete all the files in .minecraft/versions/$(< $minecraft_dir/version) and try again."
+	fi &
+	if [ ! -z "$(< $basicchecks_dir/oom)" ]; then
+		echo "Error description: Out of error (run time)."
+		echo "Solution: Increase the memory allocation for the game."
+	fi &
+	wait
 }
 
 main $@
