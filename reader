@@ -37,7 +37,7 @@ init() {
 	mkdir -p $ml_dir &
 	wait
 	touch $preprocess_dir/{renderer,arch,fabric,fml,modlauncher,optifine} &
-	touch $basicchecks_dir/{result,corruptgame,oom} &
+	touch $basicchecks_dir/{corruptgame,oom} &
 	touch $instancecheck_dir/platform
 	touch $instancecheck_dir/android/launcherversion &
 	touch $instancecheck_dir/ios/{deviceinfo,device,platform,version} &
@@ -60,9 +60,9 @@ version() {
 }
 
 reader() {
-	if [[ ! -r $1 ]]; then
+	if [ ! -r $1 ]; then
 		echo "ERROR: The log file does not exist or is unreadable."
-	elif [[ ! -d $HOME/.reader ]]; then
+	elif [ ! -d $HOME/.reader ]; then
 		init; sequence $1
 	else
 		sequence $1
@@ -78,7 +78,7 @@ sequence() {
 	optifine $1 &
 	modloader $1 &
 	wait
-	cat $basicchecks_dir/result
+	echo "$(< $basicchecks_dir/result)"
 }
 
 preprocess() {
@@ -86,6 +86,7 @@ preprocess() {
 	# It might introduce some unwanted overhead.
 	renderer $(egrep -m 1 -o "POJAV_RENDERER=.*" $1 | cut -d '=' -f2) > $preprocess_dir/renderer &
 	sed -n 4p $1 | cut -d ' ' -f2 | egrep 'arm64|x86_64|arm|x86' > $preprocess_dir/arch &
+	echo "$(egrep -m 1 'Info: Selected Minecraft version:' $1 | cut -d ':' -f3)$(egrep -m 1 'Launching Minecraft' $1 | cut -d ' ' -f3)" | cut -d ' ' -f 2- > $minecraft_dir/version &
 	# Prepare for everything
 	egrep -m 1 -n -o "Loading Minecraft .* with .* Loader .*" $1 > $preprocess_dir/fabric &
 	egrep -m 1 -o "Forge Mod Loader version .* for Minecraft .* loading" $1 > $preprocess_dir/fml &
@@ -112,17 +113,15 @@ instance_check() {
 		echo "Android" > $instancecheck_dir/platform
 		echo "Platform: Android, $(< $preprocess_dir/arch)"
 		sed -n 2p $1 | cut -d ' ' -f4 > $instancecheck_dir/android/launcherversion
-		sed -n "6p" $1 | cut -d ' ' -f 5- > $minecraft_dir/version &
 		wait
 		echo "Launcher version: $(< $instancecheck_dir/android/launcherversion)"
 		echo "Renderer: $(< $preprocess_dir/renderer)"
 		echo "Minecraft version: $(< $minecraft_dir/version)"
 	else
 		sed -n 1p $1 > $instancecheck_dir/ios/deviceinfo
-		cut -d ' ' -f5 ./.temp14 > $instancecheck_dir/ios/device
-		cut -d ' ' -f7 ./.temp14 > $instancecheck_dir/ios/platform &
-		cut -d ' ' -f8 ./.temp14 > $instancecheck_dir/ios/version &
-		egrep -m 1 -o "Launching Minecraft .*" $1 | cut -d ' ' -f3 > $minecraft_dir/version &
+		cut -d ' ' -f5 $instancecheck_dir/ios/deviceinfo > $instancecheck_dir/ios/device
+		cut -d ' ' -f7 $instancecheck_dir/ios/deviceinfo > $instancecheck_dir/ios/platform &
+		cut -d ' ' -f8 $instancecheck_dir/ios/deviceinfo > $instancecheck_dir/ios/version &
 		if [ -r ./ios_devices.txt ]; then
 			device=$(grep -m 1 $(< $instancecheck_dir/ios/deviceinfo) ./ios_devices.txt | cut -d ':' -f2)
 			echo "Device:$device"
