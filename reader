@@ -1,10 +1,5 @@
 #! /usr/bin/bash
 
-# PojavLauncher Log Reader: Renewed
-# What's new in version 3.0.0:
-# A full reimplementation of the log reader (the old 2.1.1 was gone because my phone go brrr)
-# Incredibly fast (around 60% faster)
-
 main() {
 	case $1 in
 		-h | --help) welcome ;;
@@ -78,10 +73,10 @@ sequence() {
 	modloader $1 > $reader_dir/3 &
 	basic_checks $1 > $reader_dir/4 &
 	wait
-	for i in $(seq 1 4)
+	for i in 1 2 3 4
 	do
 		if [[ ! -z $(< $reader_dir/$i) ]]; then
-			echo "$(< $reader_dir/$i)"
+			echo "$(< $reader_dir/$i)" &
 		fi
 	done
 	wait
