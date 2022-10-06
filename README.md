@@ -12,7 +12,7 @@ In two next minor releases, there will be some additions include:
 - More support for the iOS platform (I currently don't have any available)
 - Checks for valid logs, of course!
 
-A big code revamp will be arrived in 4.0, addressing the messy code in 3.x and hopefully providing at least 40% speed boost.
+A big code revamp will arrive in 4.0, addressing the messy code in 3.x and hopefully providing at least 40% speed boost.
 
 # Wait, 4.0? Where are the older ones?
 
