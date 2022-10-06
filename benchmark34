@@ -56,5 +56,5 @@ fi &
 
 # Benchmark has been done on my device, by running the reader 10 times consecutively. 3.0.0 has been tweaked to disable basic checks step.
 # 3.0.0: real 2.099s, single thread (user + sys) 5.011s
-# 4.0.0 (this): real 1.274s (65% faster), single thread 3.018s (67℅ faster)
+# 4.0.0 (this): real 1.274s (65% faster), single thread 3.108s (61℅ faster)
 # Little change in CPU utilization with multithreading, just better code.
