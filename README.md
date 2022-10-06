@@ -12,9 +12,11 @@ In two next minor releases, there will be some additions include:
 - More support for the iOS platform (I currently don't have any available)
 - Checks for valid logs, of course!
 
-# Wait, 3.0? Where are the older ones?
+A big code revamp will be arrived in 4.0, addressing the messy code in 3.x and hopefully providing at least 40% speed boost.
 
-Sadly, it got busted by accident. However, there's another major motivation to make this script from scratch: It was too slow. (Benchmarks coming soon.)
+# Wait, 4.0? Where are the older ones?
+
+Sadly, it got busted by accident.
 
 # How to use the log reader
 
