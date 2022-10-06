@@ -1,0 +1,60 @@
+#! /bin/bash
+
+for i in $(seq 7); do
+	mktemp $TMPDIR/pl.XXX >> $TMPDIR/pl.list &
+done
+
+wait
+
+t=($(< $TMPDIR/pl.list))
+
+grep -E -m 1 -o "iPhone.*|iPad.*|iPod.*|Architecture:.*" $1 > "${t[0]}" &
+grep -E -m 1 -o "Launcher version:.*" $1 > "${t[1]}" &
+grep -E -m 1 -o "Launching Minecraft .*|Minecraft version: .*" $1 > "${t[2]}" &
+grep -E -m 1 -o "Loading Minecraft .* with Fabric Loader .*" $1 > "${t[3]}" &
+grep -E -m 1 -o "Forge Mod Loader version .* for Minecraft .* " $1 > "${t[4]}" &
+
+wait
+
+p=($(< ${t[0]}))
+v=$(< ${t[1]})
+m=($(< ${t[2]}))
+l=($(< ${t[3]}))
+f=$(< ${t[4]})
+
+if [ ! -z ${p[2]} ]; then
+	echo -e "Platform: ${p[2]}, version ${p[3]}, arm64\nDevice: ${p[0]}\n$v"
+
+	grep -E -m 1 -o "dynamic-codesigning: .*" $1 > ${t[5]} &
+	grep -E -m 1 -o "JIT has been enabled" $1 > ${t[6]} &
+	wait
+
+	d=($(< ${t[5]}))
+	j=$(< ${t[6]})
+
+	if [[ "${d[1]}" == "NO" && -z "$j" ]]; then
+		echo -e "JIT availability: NO"
+	else
+		echo -e "JIT availability: yes"
+	fi
+	echo -e "Minecraft version: ${m[2]}"
+elif [ ! -z ${p[1]} ]; then
+	echo -e "Platform: Android, ${p[1]}\n$v"
+	echo -e "Minecraft version: ${m[2]}"
+else
+	echo "Platform: Android, mod installer mode"
+fi
+
+rm -f $TMPDIR/pl.* &
+
+if [ ! -z $l ]; then
+	echo -e "Mod loader: Fabric Loader version ${l[6]} for Minecraft ${l[2]}"
+fi &
+if [ ! -z "$f" ]; then
+	echo -e "Mod loader: $f"
+fi &
+
+# Benchmark has been done on my device, by running the reader 10 times consecutively. 3.0.0 has been tweaked to disable basic checks step.
+# 3.0.0: real 2.099s, single thread (user + sys) 5.011s
+# 4.0.0 (this): real 1.274s (65% faster), single thread 3.018s (67℅ faster)
+# Little change in CPU utilization with multithreading, just better code.
